@@ -18,6 +18,7 @@ function countByRank(cards){
     return counts;
 }
 
+// returns {type: string, rank: number, length: number | null}
 export function classify(cards){
     if(!cards || cards.length === 0) return null;
     const num_cards = cards.length;
@@ -53,7 +54,7 @@ export function classify(cards){
         const triple = distinct.find((rank) => counts.get(rank) === 3);
         const single = distinct.find((rank) => counts.get(rank) === 1);
         if(triple !== undefined && single !== undefined){
-            return{type: 'TRIPLE_ONE', rank: TRIPLE};
+            return{type: 'TRIPLE_ONE', rank: triple};
         }
     }
 
@@ -62,7 +63,7 @@ export function classify(cards){
         const triple = distinct.find((rank) => counts.get(rank) === 3);
         const pair = distinct.find((rank) => counts.get(rank) === 2);
         if(triple !== undefined && pair !== undefined){
-            return{type: 'TRIPLE_TWO', rank: TRIPLE};
+            return{type: 'TRIPLE_TWO', rank: triple};
         }
     }
 
@@ -74,9 +75,9 @@ export function classify(cards){
     }
 
     // Straight Pairs: >= 3 consecutive pairs with no 2s or Jokers
-    if(num_cards >= 6 && num_cards % 2 === 0 && distinct.length === n / 2 && countValues.every((count) => count === 2)){
+    if(num_cards >= 6 && num_cards % 2 === 0 && distinct.length === num_cards / 2 && countValues.every((count) => count === 2)){
         if(distinct.length >= 3 && isConsecutive(distinct) && distinct[distinct.length - 1] <= 14){
-            return{type: 'STRIAGHT_PAIRS', rank: distinct[distinct.length - 1], length: distinct.length};
+            return{type: 'STRAIGHT_PAIRS', rank: distinct[distinct.length - 1], length: distinct.length};
         }
     }
 
@@ -87,7 +88,7 @@ export function classify(cards){
     if(pureTriples.length >= 2 && isConsecutive(pureTriples) && pureTriples[pureTriples.length - 1] <= 14){
         const numOfTriples = pureTriples.length;
         const used = numOfTriples * 3;
-        const leftover = n - used;
+        const leftover = num_cards - used;
         if(leftover === 0){
             return{type: 'PLANE', rank: pureTriples[numOfTriples - 1], length: numOfTriples};
         }
@@ -100,4 +101,22 @@ export function classify(cards){
     }
 
     // Four + two singles
+    if(num_cards === 6){
+        const quad = distinct.find((rank) => counts.get(rank) === 4);
+        if(quad !== undefined && singleRanks.length === 2){
+            return{type: 'FOUR_TWO_SINGLES', rank: quad};
+        }
+    }
+
+    // Four + two pairs
+    if(num_cards === 8){
+        const quad = distinct.find((rank) => counts.get(rank) === 4);
+        if(quad !== undefined && pairRanks.length === 2){
+            return{type: 'FOUR_TWO_PAIRS', rank: quad};
+        }
+    }
+
+    return null;
 }
+export const TYPE_ORDER_NOTE =
+  'Comparisons only make sense between combos of the same type & length, or against a bomb/rocket.';
