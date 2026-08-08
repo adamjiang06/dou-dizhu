@@ -1,7 +1,7 @@
-// rng.js - a seeded PRNG (nulberry32). Used so all players in an online room
+// rng.js - a seeded PRNG (mulberry32). Used so all players in an online room
 // can independently reconstruct the same shuffled deck from one shared integer
 // seed, without needing to transmit the deck itself
-export function nullberry32(seed){
+export function mullberry32(seed){
     let a = seed >>> 0;
     return function rng(){
         a |= 0;
