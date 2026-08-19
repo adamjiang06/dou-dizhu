@@ -16,7 +16,7 @@ export async function createRoom(userId, displayName){
     const code = randomCode();
     const {data: room, error} = await supabase
         .from('rooms')
-        .insert({code})
+        .insert({code, owner_id: userId})
         .select()
         .single();
     if (error) throw error;
@@ -57,7 +57,45 @@ export async function joinRoom(code, userId, displayName){
         display_name: displayName
     });
 
-    return {room_Id: room.id, seat};
+    return {roomId: room.id, seat};
+}
+
+export async function getRoom(roomId){
+    const {data, error} = await supabase
+        .from('rooms')
+        .select('id, code, status, seed, owner_id')
+        .eq('id', roomId)
+        .single();
+    if (error) throw error;
+    return data;
+}
+
+export async function getRoomPlayers(roomId){
+    const {data, error} = await supabase
+        .from('room_players')
+        .select('seat, display_name')
+        .eq('room_id', roomId)
+        .order('seat', {ascending: true});
+    if (error) throw error;
+    return data;
+}
+
+export function subscribeToLobby(roomId, {onRoomChange, onPlayersChange}){
+    const channel = supabase
+        .channel(`lobby:${roomId}`)
+        .on(
+            'postgres_changes',
+            {event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=eq.${roomId}`},
+            (payload) => onRoomChange?.(payload.new)
+        )
+        .on(
+            'postgres_changes',
+            {event: '*', schema: 'public', table: 'room_players', filter: `room_id=eq.${roomId}`},
+            () => onPlayersChange?.()
+        )
+        .subscribe();
+
+    return () => supabase.removeChannel(channel);
 }
 
 // Host calls this once all three seats are filled (Bots can occupy empty seats)
@@ -123,7 +161,7 @@ export function subscribeToRoom(roomId, {onAction, onSeed}){
         )   
         .on(
             'postgres_changes',
-            {event: 'UPDATE', schema: 'public', table: 'rooms', filter: `room_id=eq.${roomId}`},
+            {event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=eq.${roomId}`},
             (payload) => {
                 if(payload.new.seed) onSeed?.(payload.new.seed);
             }

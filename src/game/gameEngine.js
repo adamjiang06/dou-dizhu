@@ -4,7 +4,7 @@ import { classify } from  './handTypes.js';
 import { beats } from './rules.js'
 
 export function createGame(playerNames, rng = Math.random){
-    const shuffled = shuffle(createDeck(), rng = Math.random);
+    const shuffled = shuffle(createDeck(), rng);
     const {hands, kitty} = deal(shuffled);
     const firstBidder = Math.floor(rng() * 3);
 
@@ -103,7 +103,7 @@ function applyPlay(s, {playerIndex, cardIds}){
     if(combo.type === 'BOMB' || combo.type === 'ROCKET') s.multiplier *= 2;
 
     // Removes the cards played from hand
-    const idSet = Set(cardIds);
+    const idSet = new Set(cardIds);
     player.hand = player.hand.filter((card) => !idSet.has(card.id));
     s.lastPlay = {playerIndex, combo, cards};
     s.passStreak = 0;
@@ -130,7 +130,7 @@ function applyPass(s, {playerIndex}){
 
     if(s.passStreak >= 2){
         // Both opponents passes -> back to whoever played last, trick clears
-        s.passSteak = 0;
+        s.passStreak = 0;
         s.turn = s.lastPlay.playerIndex;
         s.lastPlay = null;
     }else{

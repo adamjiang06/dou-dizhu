@@ -54,15 +54,22 @@ alter table room_players enable row level security;
 create policy "anyone can create a room"
     on rooms for insert with check (auth.uid() = owner_id);
 
+create policy "rooms are readable"
+    on rooms for select using (true);
+
 create policy "host can update room status/seed"
-    on rooms for update using (
-        auth.uid() = owner_id 
+    on rooms for update
+    using (
+        auth.uid() = owner_id
         and status = 'waiting'
+    )
+    with check (
+        auth.uid() = owner_id
     );
 
 create policy "players readable within a room"
     on room_players for select using (true);
-r
+
 create policy "a user can seat themselves"
     on room_players for insert with check (auth.uid() = user_id);
 
@@ -84,8 +91,6 @@ create policy "a seated player can insert their own actions"
 alter publication supabase_realtime add table rooms;
 alter publication supabase_realtime add table room_players;
 alter publication supabase_realtime add table room_actions;
-
-
 
 
 

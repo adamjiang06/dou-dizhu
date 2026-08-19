@@ -60,7 +60,7 @@ export function deal(shuffledDeck){
     return{hands, kitty};
 }
 
-// Sorts hand in increasing order
+// Sorts hand in decreasing order
 export function sortHand(cards){
-    return cards.slice().sort((a, b) => a.rank - b.rank);
+    return cards.slice().sort((a, b) => b.rank - a.rank);
 }

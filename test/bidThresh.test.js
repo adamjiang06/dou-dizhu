@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
-import {evaluateHandStrength} from './botAI.js';
-import {createDeck, deal, shuffle} from '../game/deck.js';
-import {mullberry32} from '../game/rng.js';
+import {evaluateHandStrength} from '../src/bot/botAI.js';
+import {createDeck, deal, shuffle} from '../src/game/deck.js';
+import {mullberry32} from '../src/game/rng.js';
 
 const SAMPLE_DEALS = 5000;
 
