@@ -5,6 +5,7 @@ import {decideBid, decidePlay} from '../bot/botAI.js';
 import {isSupabaseConfigured, requireCurrentUserId} from '../multiplayer/supabaseClient.js';
 import {createRoom, getRoom, getRoomPlayers, joinRoom, startGame, submitAction, subscribeToLobby, subscribeToRoom} from '../multiplayer/roomSync.js';
 import {mullberry32} from '../game/rng.js';
+import {BookOpen} from "lucide-react";
 import './styles.css';
 
 const SUIT_SYMBOL = { S: '♠', H: '♥', D: '♦', C: '♣' };
@@ -48,6 +49,11 @@ function Seat({ label, isLandlord, cardCount, isTurn, position }) {
 function useLocalGame(humanName) {
   const [state, setState] = useState(() => createGame([humanName, 'Bot A', 'Bot B']));
   const [message, setMessage] = useState('Bidding begins — lowest seat bids first.');
+
+  const restartGame = () => {
+    setState(createGame([humanName, 'Bot A', 'Bot B']));
+    setMessage('New game started - bidding begins.');
+  };
 
   const act = (action) => {
     setState((prev) => {
@@ -94,7 +100,7 @@ function useLocalGame(humanName) {
     return () => clearTimeout(timer);
   }, [state, humanName]);
 
-  return { state, act, message, setMessage };
+  return { state, act, message, setMessage, restartGame };
 }
 
 // Bidding button visuals
@@ -122,7 +128,7 @@ function seatsFor(mySeat) {
 
 // Displays local Dou Dizhu table
 function LocalTable({ humanName }) {
-  const { state, act, message } = useLocalGame(humanName);
+  const { state, act, message, restartGame } = useLocalGame(humanName);
   const [selected, setSelected] = useState(new Set());
 
   const human = state.players[0];
@@ -136,6 +142,9 @@ function LocalTable({ humanName }) {
 
   const selectedCards = human.hand.filter((c) => selected.has(c.id));
   const previewCombo = useMemo(() => classify(selectedCards), [selectedCards]);
+  const displayMessage = state.phase === 'PLAYING' && state.turn === 0
+    ? 'Your turn to play.'
+    : message;
 
   const playSelected = () => {
     act({ type: 'PLAY', playerIndex: 0, cardIds: [...selected] });
@@ -158,7 +167,7 @@ function LocalTable({ humanName }) {
         </div>
       </div>
 
-      <div className="status-line">{message}</div>
+      <div className="status-line">{displayMessage}</div>
 
       {state.phase === 'BIDDING' && <BiddingControls state={state} act={act} />}
 
@@ -179,8 +188,13 @@ function LocalTable({ humanName }) {
 
       {state.phase === 'SCORING' && (
         <div className="result-banner">
-          {state.players[state.winner].name} wins! {state.result.landlordWon ? 'Landlord' : 'Farmers'} take the hand
-          (×{state.multiplier}, base {state.highestBid}).
+          <div>
+            {state.players[state.winner].name} wins! {state.result.landlordWon ? 'Landlord' : 'Farmers'} take the hand
+            (×{state.multiplier}, base {state.highestBid}).
+          </div>
+          <button className="stamp-btn" style={{ marginTop: 12}} onClick={restartGame}>
+            Play Again
+          </button>
         </div>
       )}
 
@@ -194,9 +208,9 @@ function LocalTable({ humanName }) {
 }
 
 // Displays online table
-function OnlineTable({ roomId, mySeat, playerNames, seed }) {
+function OnlineTable({ roomId, mySeat, playerNames, seed, onPlayAgain }) {
   const [state, setState] = useState(() => createGame(playerNames, mullberry32(seed)));
-  const [selected, setSelected] = useState(new Set());
+  const [selected, setSelected] = useState(() => new Set());
   const [message, setMessage] = useState('Bidding begins.');
 
   useEffect(() => {
@@ -224,6 +238,13 @@ function OnlineTable({ roomId, mySeat, playerNames, seed }) {
   const seatMap = seatsFor(mySeat);
   const selectedCards = me.hand.filter((c) => selected.has(c.id));
   const previewCombo = useMemo(() => classify(selectedCards), [selectedCards]);
+  let displayMessage = message;
+
+  if(state.phase === 'PLAYING'){
+    displayMessage = state.turn === mySeat
+      ? 'Your turn to play.'
+      : `Waiting on ${playerNames[state.turn]}'s turn.`;
+  }
 
   const toggle = (id) => {
     setSelected((prev) => {
@@ -257,7 +278,7 @@ function OnlineTable({ roomId, mySeat, playerNames, seed }) {
         </div>
       </div>
 
-      <div className="status-line">{message}</div>
+      <div className="status-line">{displayMessage}</div>
 
       {state.phase === 'BIDDING' && <BiddingControls state={state} act={act} playerIndex={mySeat} />}
 
@@ -280,6 +301,17 @@ function OnlineTable({ roomId, mySeat, playerNames, seed }) {
         <div className="result-banner">
           {state.players[state.winner].name} wins! {state.result.landlordWon ? 'Landlord' : 'Farmers'} take the hand
           (×{state.multiplier}, base {state.highestBid}).
+
+          {mySeat === 0 && (
+            <button className="stamp-btn" style={{ marginTop: 12 }} onClick={onPlayAgain}>
+              Play Again
+            </button>
+          )}
+          {mySeat !== 0 && (
+            <div className="status-line">
+              Waiting for host to start again...
+            </div>
+          )}
         </div>
       )}
 
@@ -293,7 +325,7 @@ function OnlineTable({ roomId, mySeat, playerNames, seed }) {
 }
 
 // Online Lobby 
-function OnlineLobby({ name }) {
+function OnlineLobby({ name, onRoomActiveChange }) {
   const [code, setCode] = useState('');
   const [roomCode, setRoomCode] = useState('');
   const [roomId, setRoomId] = useState(null);
@@ -345,6 +377,10 @@ function OnlineLobby({ name }) {
   };
 
   useEffect(() => {
+    onRoomActiveChange?.(Boolean(roomId));
+  }, [roomId, onRoomActiveChange]);
+
+  useEffect(() => {
     if (!roomId) return undefined;
 
     const refreshPlayers = async () => {
@@ -378,7 +414,7 @@ function OnlineLobby({ name }) {
     const playerNames = [0, 1, 2].map((seat) => (
       players.find((player) => player.seat === seat)?.display_name ?? `Seat ${seat + 1}`
     ));
-    return <OnlineTable roomId={roomId} mySeat={mySeat} playerNames={playerNames} seed={roomSeed} />;
+    return <OnlineTable roomId={roomId} mySeat={mySeat} playerNames={playerNames} seed={roomSeed} onPlayAgain={handleStart} />;
   }
 
   return (
@@ -425,6 +461,7 @@ function OnlineLobby({ name }) {
 export default function App() {
   const [screen, setScreen] = useState('menu'); // menu | local | online
   const [name, setName] = useState('You');
+  const [onlineRoomActive, setOnlineRoomActive] = useState(false);
 
   if(screen === 'local') return <LocalTable humanName={name || 'You'} />;
   if(screen === 'online') return(
@@ -433,8 +470,15 @@ export default function App() {
         <span className="brand-hanzi">斗地主</span>
         <span className="brand-en">Fight the Landlord</span>
       </div>
-      <OnlineLobby name={name || 'You'} />
-      <button className="stamp-btn ghost" style={{marginTop: 16}} onClick={() => setScreen('menu')}>Back</button>
+      <OnlineLobby name={name || 'You'} onRoomActiveChange={setOnlineRoomActive} />
+      <button
+        className="stamp-btn ghost"
+        disabled={onlineRoomActive}
+        style={{marginTop: 16}}
+        onClick={() => setScreen('menu')}
+      >
+        Back
+      </button>
     </div>
   );
 
@@ -454,6 +498,12 @@ export default function App() {
           <button className="stamp-btn" onClick={() => setScreen('local')}>Play vs Bots</button>
           <button className="stamp-btn ghost" onClick={() => setScreen('online')}>Play Online</button>
         </div>
+      </div>
+      <div>
+        <button className="instructions-btn">
+          <BookOpen size={24}/>
+          <span>How to Play</span>
+          </button>
       </div>
     </div>
   );
